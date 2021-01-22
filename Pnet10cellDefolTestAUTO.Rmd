@@ -1,0 +1,355 @@
+---
+title: "PnET_noSpinCalibrations with LUC"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  pdf_document:
+  toc: true
+  toc_depth: 3
+classoption:  landscape
+geometry: margin= 0.5in
+
+---
+
+```{r call in libraries}
+#knitr::opts_chunk$set(echo = TRUE,root.dir="Y:/LANDIS/PREP/Calibration/IC/noSpin10cell")
+library(tidyverse)
+library(directlabels)
+library(raster)
+library(cowplot)
+library(gt)
+library(webshot)
+#library(knitr)
+```
+
+```{r gesp colors}
+
+cols <-  c("ABBA"="#00FFFF", "ACRU"="#CC0033", 
+           "ACSA"="#276419","BEAL"= "#cc33ff", "BELE"="#35978f", "BEPA"="#ff3399", "BEPO"="#542788", "CAGL"="#543005", 
+           "FAGR"="#7f3b08", "FRAM"="#7fbc41", "FRNI"="#8073ac","LALA"= "#80cdc1", "OSVI"="#8c510a", "PIGL"="#8e0152", 
+           "PIMA"="#b2abd2","PIRE"= "#b35806", "PIRI"="#b8e186","PIRU"="#999999", "PIST"="#33FF33", "POBA"="#c51b7d", "POGR"="#c7eae5", 
+           "POTR"="#d8daeb", "PRSE"="#de77ae", "QUAL"="#dfc27d", "QUCO"="#e08214", "QUPR"="#e6f5d0", "QURU"="#f1b6da", 
+           "QUVE"="#f6e8c3", "THOC"="#FFFF99", "TIAM"="#fdb863","TSCA"= "#0000FF","ULAM" ="#fee0b6")
+ 
+```
+
+```{r change text files}
+# generic parameter file
+tx <- readLines("C:/Users/danel/Desktop/pnetCheck/GENERIC_PNET_V33.txt")
+mr <- substr(tx[15],11,nchar(tx[15]))
+mr
+newMR <- "0.002"
+newMR
+tx2  <- gsub(pattern = paste0("MaintResp\t",mr), replace = paste0("MaintResp\t",newMR), x = tx)
+writeLines(tx2,con="C:/Users/danel/Desktop/pnetCheck/GENERIC_PNET_V33.txt")
+
+# pnet text file to change IC raster
+pin <- readLines("C:/Users/danel/Desktop/pnetCheck/CTRV_PnET_succession_currentTenCell.txt")
+mcc <- substr(pin[13],23,nchar(pin[13]))  #"InitialCommunitiesMap\t\"mc1.img\"" 
+mcc
+newmcc <- "\"mc1.img\""  #"mc1_10.img"
+pin2  <- gsub(pattern = paste0("InitialCommunitiesMap\t",mcc), replace = paste0("InitialCommunitiesMap\t",newmcc), x = pin)
+writeLines(pin2,con="C:/Users/danel/Desktop/pnetCheck/CTRV_PnET_succession_currentTenCell.txt")
+
+# lu+ defoliation
+lutx <- readLines("C:/Users/danel/Desktop/pnetCheck/land-use-scenariosDefolMegsVersion.txt")
+fram <- lutx[43] 
+fram
+tsca <- lutx[45]
+tsca
+# make sure both sets are changed here!
+newfram <- 40
+newtsca <- 35
+lutx[43] <- "\t\t fraxamer 1-300(40%)"
+lutx[45] <- "\t\t tsugcana 1-300(35%)"
+writeLines(lutx,con="C:/Users/danel/Desktop/pnetCheck/land-use-scenariosDefolMegsVersion.txt")
+#
+```
+
+```{r setup,eval=TRUE, include=FALSE}
+##################################################################################################
+#CHANGE # startYear icNamr
+##################################################################################################
+startYear <- 2010
+icName <- "mc1"
+simulab <- paste0("MR",newMR) 
+icNameTxt <- "IC_tscafraxS"  
+runNumber <- paste0("fram",newfram,"tsca",newtsca)
+pnetV <- "GH4"  #"GH4mFix"
+simu <- paste0("output",Sys.Date(),"_",pnetV,icNameTxt,icName,"_",simulab,runNumber) 
+simu
+```
+
+```{r run LANDIS}
+  sliceVector <- c("pnetCheck")
+  for(i in seq_along(sliceVector)){
+    slice <- sliceVector[i]
+    rootPath <- "C:/Users/danel/Desktop/pnetCheck"
+    #sitePath <- paste0("Y:/LANDIS/MA_RUNS/",slice)
+    #
+    setwd(rootPath)  #sitePath
+    getwd()
+    shell.exec("RunIt.bat")
+  }
+```
+
+```{r change output folder name, eval=TRUE, include=FALSE}
+#run manually for EVERY SIMU - main effect to change folder name 
+path <-"C:/Users/danel/Desktop/pnetCheck"
+
+ll<-readLines(paste0(path,"/Landis-log.txt"))
+writeLines(ll,paste0(path,"/output","/Landis-log.txt"))
+pnet<-readLines(paste0(path,"/CTRV_PnET_succession_currentTenCell.txt"))
+writeLines(pnet,paste0(path,"/output/CTRV_PnET_succession_currentTenCell.txt"))
+#
+os<-readLines(paste0(path,"/CTRV_PNEToutputsites.txt"))
+writeLines(os,paste0(path,"/output/CTRV_PNEToutputsites.txt"))
+#
+#ic<-readLines("C:\\Users\\dml486\\Desktop\\PnETnoSpinComparisons/noSpin/Leverett_init_comm04_06_2017_full_ageFourCell.txt")
+scen<-readLines(paste0(path,"/scenarioTenCell.txt"))
+writeLines(scen,paste0(path,"/output/scenario.txt"))
+#
+#id <- "defolTest_V45IC_sameMapCodeLUCbiohar"  # "beta3_V42IC_sameMapCodeLUC10yr"
+#counter <- 3
+
+#change name of output file to make unique
+setwd(path)
+file.rename(paste0(path,"/output"),paste0(path,"/",simu))
+
+```
+10Cell Simulations that looks at species trajectories
+simulation `r print(simulab)`
+##Initial Communities in text file and IC map codes  
+```{r call in Initial Communities,warning=FALSE,echo=FALSE,fig.width=8,fig.height=3,eval=TRUE}
+#run always
+print(simulab)
+ icras <- raster(paste0(path,"/", icName,".img") )
+  #plot(icras,main="InitialCommunity MapCodes")
+  #plot(icras,legend=FALSE,axes=FALSE,main=simu[i],col=rev(terrain.colors(2)));legend("topright", legend = c("1851","6174"), fill = rev(terrain.colors(2)))
+mapcode <- getValues(icras)
+xy <- as.data.frame(xyFromCell(icras,1:ncell(icras)))
+xy <- cbind(xy,mapcode)
+xy$mapcode <- factor(xy$mapcode)
+ggplot(xy,aes(x=x,y=y,fill=mapcode))+geom_raster()+
+  theme(axis.title=element_blank(),
+          axis.text=element_blank(),
+          axis.ticks=element_blank(),
+          line=element_blank(),
+          strip.background=element_blank(),
+          strip.text=element_text(face="bold",size=rel(1.1)) )
+#
+for(i in seq_along(icNameTxt)){
+  print(icNameTxt[i])
+  ic1 <- readLines(paste0(path,"/",icNameTxt[i],".txt"),skipNul=TRUE) 
+  #ic1 <- readLines(paste0(path,"/",icNameTxt,".txt"),skipNul=TRUE) 
+message("The initial communities in each map code")
+print(ic1)
+}
+
+```
+
+
+```{r cohort csvs all years,echo=FALSE, eval=TRUE,warning=FALSE,fig.height=5,fig.width=10}
+#
+ icras <- raster(paste0(path,"/", icName,".img"))
+ plot(icras,main="InitialCommunity MapCodes")
+mapcode <- getValues(icras)
+cell <- c(1,2,3,4,5,6,7,8,9,10)
+mcSite <-  as.data.frame(cbind(mapcode, cell ))
+### cohort information
+#individual cohorts
+for(i in seq_along(simu)){
+lfc <- list.files(path=file.path(path,simu[i],"PNEToutputsites"), pattern="Cohort_.*.csv", recursive=TRUE,full.names=TRUE)
+results <- sapply(lfc,function(x) read.csv(x),simplify=FALSE)
+}
+
+lfc <- list.files(path=file.path(path,simu[i],"PNEToutputsites"), pattern="Cohort_.*.csv", recursive=TRUE,full.names=TRUE)
+
+results <- sapply(lfc,function(x) read.csv(x),simplify=FALSE)
+cohorts <- as.data.frame(do.call(rbind, results), stringsAsFactors = FALSE)
+#names(cohorts)
+
+cohorts$fullname <- row.names(cohorts)
+fullcohorts <- cohorts %>% 
+  separate(fullname, c(NA,"partname"),sep="/pnetCheck/output" ) %>% 
+  # C(year, month, day, run,ic,ver=simulab,NA=pnetOutputsites,site)
+  separate(partname,c(NA,NA,NA ,"run","IC",NA,"ver",NA,"site",NA,"genuspec","yearEst")) %>% 
+  separate(site,c(NA, "cell"),sep ="Site",remove=FALSE) %>%
+  mutate(cell=as.numeric(cell)) %>% 
+  left_join(mcSite) %>% 
+  rowid_to_column(var="rowid") %>% 
+  column_to_rownames("rowid") %>% 
+  rename(time=Time,age=Age.yr.,topLayer=TopLayer...,LAIm2=LAI.m2.,gPSNgCm2m=GrossPsn.gC_m2_mo.,FolRespgCm2m=FolResp.gC_m2_mo.,MRespgCm=MaintenanceRespiration.gC_mo.,nPSNgCm2m=NetPsn.gC_m2_mo.,Trans_mm=Transpiration.mm.,WUEg_mm=WUE.g_mm.,folgDW=Fol.gDW.,rootgDW=Root.gDW.,woodgDW=Wood.gDW.,NSCgC=NSC.gC.,NSCfrac=NSCfrac...,fWater=fWater...,fRad=fRad...,DelAMax=DelAMax...,fTemp_psn=fTemp_psn...,fTemp_resp=fTemp_resp...,fage=fage...,leafon=LeafOn...,FActiveBio_gDW_gDW=FActiveBiom.gDW_gDW.,adjFolNgN_gC=AdjFolN.gN_gC.,adjFracFol=AdjFracFol...,CiMod=CiModifier...) %>% 
+  dplyr::select(run,site,cell,mapcode,yearEst,genuspec,time,age,topLayer,LAIm2,gPSNgCm2m,FolRespgCm2m,MRespgCm,nPSNgCm2m,Trans_mm,WUEg_mm,folgDW,rootgDW,woodgDW,NSCgC,NSCfrac,fWater,fRad,DelAMax,fTemp_psn,fTemp_resp,fage,leafon,FActiveBio_gDW_gDW,adjFolNgN_gC,adjFracFol,CiMod,AdjHalfSat)%>% 
+  mutate(time=ifelse(time==0,2009.92,time))
+ 
+all <- fullcohorts %>% 
+  dplyr::select(run,site,cell,yearEst,genuspec,time,topLayer,folgDW,woodgDW) %>% 
+  separate(time,c("yr","mo")) %>% 
+  filter(mo=="42") %>% 
+  mutate(year=as.integer(yr),month=as.integer(mo)) %>% 
+  group_by(run,site,genuspec,year,yearEst,topLayer) %>% 
+  summarise(spFolgdw=sum(folgDW),spWdgdw=sum(woodgDW)) %>% 
+  mutate(gesp=ifelse(genuspec=="acerrubr","ACRU",
+                     ifelse(genuspec=="querrubr","QURU",
+                            ifelse(genuspec=="pinustro","PIST",
+                                   ifelse(genuspec=="tsugcana","TSCA",
+                                          ifelse(genuspec=="betulent","BELE",
+                                                 ifelse(genuspec=="abiebals","ABBA",
+                                                        ifelse(genuspec== "acersacc","ACSA",
+                                                               ifelse(genuspec== "betualle","BEAL",
+                                                          ifelse(genuspec=="betupapy","BEPA",
+                                                                          ifelse(genuspec=="caryglab","CAGL",
+                                                                                 ifelse(genuspec=="picerube","PIRU",
+                                                                                        ifelse(genuspec== "poputrem","POTR",
+                                                                                               ifelse(genuspec=="prunsero","PRSE",
+                                                                                                      ifelse(genuspec=="queralba","QUAL",
+                                                                                                             ifelse(genuspec=="quercocci","QUCO",
+                                                                                                                    ifelse(genuspec=="quervelu","QUVE",
+                                                                                                                           ifelse(genuspec=="ulmuamer","ULAM",
+                                                                                                             
+                                                                        ifelse(genuspec=="fagugran","FAGR",
+                                                                             ifelse(genuspec=="fraxamer","FRAM","OTHR"))))))))))))))))))))
+
+  
+all$site <- factor(all$site,levels=c("Site1","Site2","Site3","Site4","Site5","Site6","Site7","Site8","Site9","Site10"))
+all$topLayer <- factor(all$topLayer)
+all$yearEst <- factor(all$yearEst)
+pw <- ggplot(all,aes(x=year,y=spWdgdw,col=gesp,linetype=gesp,lwd=yearEst))+
+  #geom_jitter(aes(shape=yearEst)) +
+  geom_line(position=position_dodge2(width=.01,padding=.1)) + #,lwd=0.9,  #width was .1
+  #scale_x_continuous(limits=c(2010,2020), breaks=c(2010,2012,2014,2016,2018,2020)) +
+  scale_y_continuous(limits=c(0,NA),breaks=seq(0,max(all$spWdgdw),by=1000)) +
+  facet_wrap(~site,ncol=5) + 
+  #geom_jitter(size=.2)+ 
+  scale_colour_manual(name="gesp",values=cols)+theme(
+   axis.text.x = element_text(size=12,colour="black",angle=90,vjust=-.1), 
+  )
+# pw
+p <- ggplot(all,aes(x=year,y=spFolgdw,col=gesp))+geom_line(lwd=1.0)+facet_wrap(~site,ncol=5)+  #[all$year<=2012,]
+  scale_colour_manual(name="gesp",values=cols)+theme(
+   axis.text.x = element_text(size=12,colour="black",angle=90,vjust=-.1), 
+  )
+#p
+allmo <- fullcohorts %>% 
+  dplyr::select(run,site,mapcode,yearEst,genuspec,time,folgDW) %>% 
+  group_by(run,site,mapcode,genuspec,time) %>% 
+  summarise(spFolgdw=sum(folgDW)) %>% 
+  mutate(gesp=ifelse(genuspec=="acerrubr","ACRU",
+                     ifelse(genuspec=="querrubr","QURU",
+                            ifelse(genuspec=="pinustro","PIST",
+                                   ifelse(genuspec=="tsugcana","TSCA",
+                                          ifelse(genuspec=="betulent","BELE",
+                                                 ifelse(genuspec=="abiebals","ABBA",
+                                                        ifelse(genuspec== "acersacc","ACSA",
+                                                               ifelse(genuspec== "betualle","BEAL",
+                                                                      ifelse(genuspec=="betupapy","BEPA",
+                                                                          ifelse(genuspec=="caryglab","CAGL",
+                                                                                 ifelse(genuspec=="picerube","PIRU",
+                                                                                        ifelse(genuspec== "poputrem","POTR",
+                                                                                               ifelse(genuspec=="prunsero","PRSE",
+                                                                                                      ifelse(genuspec=="queralba","QUAL",
+                                                                                                             ifelse(genuspec=="quercocci","QUCO",
+                                                                                                                    ifelse(genuspec=="quervelu","QUVE",
+                                                                                                                           ifelse(genuspec=="ulmuamer","ULAM",
+                                                                                                             
+                                                                        ifelse(genuspec=="fagugran","FAGR",
+                                                                             ifelse(genuspec=="fraxamer","FRAM","OTHR"))))))))))))))))))))
+
+allmo$site <- factor(allmo$site,levels=c("Site1","Site2","Site3","Site4","Site5","Site6","Site7","Site8","Site9","Site10"))
+pf <- ggplot(allmo[allmo$time<=2016,],aes(x=time,y=spFolgdw,col=gesp))+geom_line(lwd=0.6)+facet_wrap(~site,ncol=5)+ geom_point()+ scale_colour_manual(name="gesp",values=cols)+theme(
+   axis.text.x = element_text(size=12,colour="black",angle=90,vjust=-.1), 
+  )
+
+pfall <- ggplot(allmo,aes(x=time,y=spFolgdw,col=gesp))+geom_line(lwd=0.4)+
+  facet_wrap(~site,ncol=5)+ 
+  geom_point()+ 
+  scale_colour_manual(name="gesp",values=cols)+
+  theme(
+   axis.text.x = element_text(size=12,colour="black",angle=90,vjust=-.1), 
+  )
+title <- ggdraw() + draw_label(paste0(icNameTxt,".txt ","MaintResp=",newMR," framDefol=",newfram," tscaDefol=",newtsca), fontface='bold')
+pg1 <- plot_grid(pfall,pw,nrow=2)
+pg <- plot_grid(title, pg1, ncol=1, rel_heights=c(0.1, 1)) # rel_heights values control title margins
+
+#ggsave(paste0(path,"/outputFigures/v",icNameTxt,"_",simulab,runNumber,pnetV,".jpg"),device="jpg",plot=pg,width=8,height=10,units=c("in"))
+#print(pw);print(pfall)
+
+pfstart <- ggplot(allmo[allmo$time<=2020,],aes(x=time,y=spFolgdw,col=gesp))+geom_line(lwd=0.4)+facet_wrap(~site,ncol=5)+ geom_point()+ scale_colour_manual(name="gesp",values=cols)+theme(
+   axis.text.x = element_text(size=12,colour="black",angle=90,vjust=-.1), 
+  )
+#
+topVals <- c(1,2,3,4,5)
+botVals <- c(6,7,8,9,10)
+#biomass table #TODO()improve 
+bioTable <- all %>% 
+   mutate(site=as.character(site),
+         colGroup=ifelse(site %in% paste0("Site",topVals),paste0("Col",substr(site,5,5)),
+                          ifelse(site=="Site6","Col1",
+                                 ifelse(site=="Site7","Col2",
+                                        ifelse(site=="Site8","Col3",
+                                               ifelse(site=="Site9","Col4","Col5"))))), 
+         treatment=ifelse(site %in% paste0("Site",topVals),"control","defol")) %>% 
+  mutate(estGroup=ifelse(as.integer(yearEst)<=year,"initial","regen")) %>% 
+  group_by(run,site,gesp,estGroup) %>% 
+  arrange(run,site,gesp,estGroup,year) %>% 
+  mutate(initBio=first(spWdgdw),pctChangeInit=round((spWdgdw-initBio)/initBio*100)) %>% 
+  arrange(run,site,gesp,estGroup,desc(year)) %>% 
+  slice(1) %>% 
+  dplyr::select(colGroup,treatment,run,site,"lastYearAlive"=year,estGroup,gesp,initBio,spWdgdw,pctChangeInit) %>% 
+  pivot_wider(id_cols=c(run,treatment,gesp,estGroup,lastYearAlive),names_from=colGroup,values_from=c(spWdgdw)) %>% 
+  arrange(gesp,treatment) %>% 
+  filter(lastYearAlive==startYear+simuYears-1)
+#last year alive table 
+lya <- all %>% filter(genuspec %in% c("fraxamer","tsugcana")) %>% 
+  group_by(site,gesp) %>% 
+  arrange(desc(year)) %>% 
+  slice(1) %>% 
+  mutate(site=as.character(site),
+         persistence=year-startYear,
+         colGroup=ifelse(site %in% paste0("Site",topVals),paste0("Col",substr(site,5,5)),
+                          ifelse(site=="Site6","Col1",
+                                 ifelse(site=="Site7","Col2",
+                                        ifelse(site=="Site8","Col3",
+                                               ifelse(site=="Site9","Col4","Col5"))))), 
+         treatment=ifelse(site %in% paste0("Site",topVals),"control","defol"),
+         rowGroup=ifelse(site %in% paste0("Site",topVals),"row1","row2")
+         ) %>% 
+  dplyr::select(treatment,colGroup,rowGroup,colGroup,site,gesp,persistence) %>%
+  arrange(gesp,colGroup,treatment) %>% 
+  pivot_wider(id_cols=c(gesp,treatment),names_from=colGroup,values_from=persistence) %>%
+  ungroup() #,names_prefix="lastAlive_"
+lyatab <- lya %>% 
+  gt(rowname_col="gesp") %>% 
+  tab_header(
+    title="N Years Species Persisted over 30 year simulation",
+    subtitle=paste0("Defoliation % and MaintResp =",runNumber," ",simulab)
+  )
+lya$run <- paste0(runNumber,simulab)
+
+lyaRunning <- read.csv(paste0(path,"/lyaRunning.csv")) %>% mutate(gesp=as.character(gesp),treatment=as.character(treatment),
+                                                                  Col1=as.integer(Col1),Col2=as.integer(Col2),Col3=as.integer(Col3),Col4=as.integer(Col4),Col5=as.integer(Col5),run=as.character(run))
+lyaRunning <- bind_rows(lyaRunning,lya)
+lya
+
+#
+t1 <- tableGrob(lya, rows = NULL, theme = ttheme_minimal())
+title <- textGrob("N years species persisted over simulation")
+padding <- unit(2,"mm")
+table <- gtable_add_rows(
+  t1,
+  heights=grobHeight(title) + padding,
+  pos=0 )
+gt <- gtable_add_grob(
+  table,
+  title,
+  1, 1, 1, ncol(table)
+)
+grid.arrange(pg, gt, ncol = 1, heights = c(3,1))
+pt <- arrangeGrob(pg,gt,ncol=1,heights = c(3,1))
+ggsave(paste0(path,"/outputFigures/TESTv",icNameTxt,"_",simulab,runNumber,pnetV,".jpg"),device="jpg",plot=pt,width=7.5,height=10,units=c("in"))
+
+
+
+```
+#TODO() add in ggplot_library and ggplot_rmd library add table to figure
+
